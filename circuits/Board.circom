@@ -2,6 +2,7 @@
 // Checks whether the placement of pieces on the board is valid
 template Board() {
     // The rows are each piece represented by its x and y coordinates
+    // TODO: perhaps change to create a component piece that has a variables determining the rank, whether a piece is a bomb, miner, or scout, etc.
     signal input bombs[6][2];
     signal input marshal[2];
     signal input general[2];
