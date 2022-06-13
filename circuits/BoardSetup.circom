@@ -1,22 +1,11 @@
 include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/mux1.circom";
-
-// Thinking about a separate Piece template, but not sure what the output would be other than rank which can be specified as inputs anyway
-// template Piece() {
-//     // All booleans as 0 or 1
-//     signal input isBomb;
-//     signal input isScout;
-//     signal input isMiner;
-//     signal input isSpy;
-
-//     signal input rank;
-// }
+include "../node_modules/circomlib/circuits/poseidon.circom";
+include "../node_modules/circomlib/circuits/mimcsponge.circom";
 
 template PieceInSetupRange() {
     signal input x;
     signal input y;
-    // TODO: wanted to use this, but might need to switch to a mux
-    // get this error when using it There are constraints depending on the value of the condition and it can be unknown during the constraint generation phase
     signal input isPlayerOne;
 
     // Check that the x coordinates are < 10
@@ -53,22 +42,10 @@ template PieceInSetupRange() {
 // Checks whether the placement of pieces on the board is valid. 
 // The board is 10 x 10 with two players occupying four rows on both ends with two empty rows in the middle
 template BoardSetup() {
-    // The rows are each piece represented by its x and y coordinates
     // TODO: perhaps change to create a component piece that has a variables determining the rank, whether a piece is a bomb, miner, or scout, etc.
-    // Previous way I was specifying stuff
-    // signal input bombs[6][3];
-    // signal input marshal[2];
-    // signal input general[2];
-    // signal input colonel[2][2];
-    // signal input major[3][2];
-    // signal input lieutenant[4][2];
-    // signal input sergeant[4][2];
-    // signal input miner[5][2];
-    // signal input scout[8][2];
-    // signal input spy[1][2];
 
     // The rows are a piece represented by its x and y coordinates, and then its rank
-    // Every piece is represented by its rank 1-10. Bombs have a rank of 11 and can only be defeated by miners.
+    // Every ranked piece is represented by its rank 1-10. Bombs have a rank of 11 and can only be defeated by miners. The Flag has a rank of 0.
     // All game logic is done with ranks, which is fine as all the special pieces (Bomb, Miner, Scout, Spy) have a unique rank not shared by other generic pieces
     // More information on the game rules can be found here: https://www.hasbro.com/common/instruct/Stratego.PDF
     signal input piecesPlayerOne[40][3];
@@ -76,8 +53,11 @@ template BoardSetup() {
 
     signal input trapdoor;
 
-    signal output hash;
+    signal output solnHashOut;
 
+    // Need to do multi mux to check that the game board has the correct amount of players of each rank. Can't compare amounts of certain input as it is 
+    // unkown at compile time
+    // Perhaps it would be easier to switch to the separate variables representing each type of player and then the ranks are simply hardcoded
     var bombCounter;
     var marshalCounter;
     var generalCounter; 
@@ -89,14 +69,80 @@ template BoardSetup() {
     var scoutCounter;
     var spyCounter;
 
+    // Could instead use this hardcoded ranks array, and a set way the pieces must be specified in the inputs
+    // No need for the counters then as the pieces must be in rank order
+    var ranks[12] = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+
     component pieceInRangeValidatorP1[40];
+    component pieceInRangeValidatorP2[40];
     for (var i = 0; i < 40; i++) {
+        // Check that each player has their pieces only on the closest four rows to their starting side
         pieceInRangeValidatorP1[i] = PieceInSetupRange();
         pieceInRangeValidatorP1[i].x <== piecesPlayerOne[i][0];
         pieceInRangeValidatorP1[i].y <== piecesPlayerOne[i][1];
-        pieceInRangeValidatorP1[i].isPlayerOne <== piecesPlayerOne[i][2];
+        pieceInRangeValidatorP1[i].isPlayerOne <== 1;
+
+        pieceInRangeValidatorP2[i] = PieceInSetupRange();
+        pieceInRangeValidatorP2[i].x <== piecesPlayerTwo[i][0];
+        pieceInRangeValidatorP2[i].y <== piecesPlayerTwo[i][1];
+        pieceInRangeValidatorP2[i].isPlayerOne <== 0;
+
+        // Check that the pieces included are of the correct rank and in order
+        if (i < 6) {
+            ranks[0] === piecesPlayerOne[i][2];
+            ranks[0] === piecesPlayerTwo[i][2];
+        } else if (i == 6) {
+            ranks[1] === piecesPlayerOne[i][2];
+            ranks[1] === piecesPlayerTwo[i][2];
+        } else if (i == 7) {
+            ranks[2] === piecesPlayerOne[i][2];
+            ranks[2] === piecesPlayerTwo[i][2];
+        } else if (i > 7 && i <= 9) {
+            ranks[3] === piecesPlayerOne[i][2];
+            ranks[3] === piecesPlayerTwo[i][2];
+        } else if (i >= 10 && i <= 12) {
+            ranks[4] === piecesPlayerOne[i][2];
+            ranks[4] === piecesPlayerTwo[i][2];
+        } else if (i >= 13 && i <= 16) {
+            ranks[5] === piecesPlayerOne[i][2];
+            ranks[5] === piecesPlayerTwo[i][2];
+        } else if (i >= 17 && i <= 20) {
+            ranks[6] === piecesPlayerOne[i][2];
+            ranks[6] === piecesPlayerTwo[i][2];
+        } else if (i >= 21 && i <= 24) {
+            ranks[7] === piecesPlayerOne[i][2];
+            ranks[7] === piecesPlayerTwo[i][2];
+        } else if (i >= 25 && i <= 29) {
+            ranks[8] === piecesPlayerOne[i][2];
+            ranks[8] === piecesPlayerTwo[i][2];
+        } else if (i >= 30 && i <= 37) {
+            ranks[9] === piecesPlayerOne[i][2];
+            ranks[9] === piecesPlayerTwo[i][2];
+        } else if (i == 38) {
+            ranks[10] === piecesPlayerOne[i][2];
+            ranks[10] === piecesPlayerTwo[i][2];
+        } else if (i == 39) {
+            ranks[11] === piecesPlayerOne[i][2];
+            ranks[11] === piecesPlayerTwo[i][2];
+        }
     }
 
+    // TODO: add in collision check for own players pieces
+
+    component hasher = MiMCSponge(241, 220, 1);
+    hasher.k <== 0;
+    hasher.ins[0] <== trapdoor;
+    for (var i = 0; i < 120; i++) {
+        var pieceIndex = i \ 3;
+        hasher.ins[i+1] <== piecesPlayerOne[pieceIndex][i % 3];
+    }
+
+    for (var i = 0; i < 120; i++) {
+        var pieceIndex = i \ 3;
+        hasher.ins[i+121] <== piecesPlayerTwo[pieceIndex][i % 3];
+    }
+
+    solnHashOut <== hasher.outs[0];
 }
 
 component main = BoardSetup();
