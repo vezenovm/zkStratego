@@ -1,6 +1,5 @@
 include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/mux1.circom";
-include "../node_modules/circomlib/circuits/poseidon.circom";
 include "../node_modules/circomlib/circuits/mimcsponge.circom";
 
 template PieceInSetupRange() {
@@ -45,8 +44,9 @@ template BoardSetup() {
     // TODO: perhaps change to create a component piece that has a variables determining the rank, whether a piece is a bomb, miner, or scout, etc.
 
     // The rows are a piece represented by its x and y coordinates, and then its rank
-    // Every ranked piece is represented by its rank 1-10. Bombs have a rank of 11 and can only be defeated by miners. The Flag has a rank of 0.
+    // Every ranked piece is represented by its rank 1-10. Bombs have a rank of 11 and can only be defeated by miners. The Flag has a rank of 12.
     // All game logic is done with ranks, which is fine as all the special pieces (Bomb, Miner, Scout, Spy) have a unique rank not shared by other generic pieces
+    // Upon removal of a piece it can be specified with a rank of 0
     // More information on the game rules can be found here: https://www.hasbro.com/common/instruct/Stratego.PDF
     signal input piecesPlayerOne[40][3];
     signal input piecesPlayerTwo[40][3];
@@ -55,23 +55,9 @@ template BoardSetup() {
 
     signal output solnHashOut;
 
-    // Need to do multi mux to check that the game board has the correct amount of players of each rank. Can't compare amounts of certain input as it is 
-    // unkown at compile time
-    // Perhaps it would be easier to switch to the separate variables representing each type of player and then the ranks are simply hardcoded
-    var bombCounter;
-    var marshalCounter;
-    var generalCounter; 
-    var colonelCounter;
-    var majorCounter;
-    var lieutenantCounter;
-    var sergeantCounter;
-    var minerCounter;
-    var scoutCounter;
-    var spyCounter;
-
-    // Could instead use this hardcoded ranks array, and a set way the pieces must be specified in the inputs
+    // Use hardcoded ranks array, and a set way the pieces must be specified in the inputs
     // No need for the counters then as the pieces must be in rank order
-    var ranks[12] = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+    var ranks[12] = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12];
 
     component pieceInRangeValidatorP1[40];
     component pieceInRangeValidatorP2[40];
@@ -127,7 +113,46 @@ template BoardSetup() {
         }
     }
 
-    // TODO: add in collision check for own players pieces
+    // TODO: add in collision check for each player's pieces
+    // Can either form a bitmap of the board, or check a piece's coordinates against all other cooridnates
+    // Should test whether one is more computationally expensive than the other
+    component collisionCheckerP1[1560]; // 39th triangular number is 780, and need to make two checks for x and y
+    var k = 0;
+    for (var i = 0; i < 40; i++) {
+        for (var j = i+1; j < 40; j++) {
+            // TODO: might be better to move this to another template that more cleanly compares x and y coordinates
+            collisionCheckerP1[k] = IsEqual();
+            collisionCheckerP1[k].in[0] <== piecesPlayerOne[i][0];
+            collisionCheckerP1[k].in[1] <== piecesPlayerOne[j][0];
+
+            collisionCheckerP1[k + 1] = IsEqual();
+            collisionCheckerP1[k + 1].in[0] <== piecesPlayerOne[i][1];
+            collisionCheckerP1[k + 1].in[1] <== piecesPlayerOne[j][1];
+
+            // One of these out signals must be 0
+            collisionCheckerP1[k].out * collisionCheckerP1[k+1].out === 0;
+            k += 2;
+        }
+    }
+
+    component collisionCheckerP2[1560]; // 39th triangular number is 780, and need to make two checks for x and y
+    k = 0;
+    for (var i = 0; i < 40; i++) {
+        for (var j = i+1; j < 40; j++) {
+            // TODO: might be better to move this to another template that more cleanly compares x and y coordinates
+            collisionCheckerP2[k] = IsEqual();
+            collisionCheckerP2[k].in[0] <== piecesPlayerOne[i][0];
+            collisionCheckerP2[k].in[1] <== piecesPlayerOne[j][0];
+
+            collisionCheckerP2[k + 1] = IsEqual();
+            collisionCheckerP2[k + 1].in[0] <== piecesPlayerTwo[i][1];
+            collisionCheckerP2[k + 1].in[1] <== piecesPlayerTwo[j][1];
+
+            // One of these out signals must be 0
+            collisionCheckerP2[k].out * collisionCheckerP2[k+1].out === 0;
+            k += 2;
+        }
+    }
 
     component hasher = MiMCSponge(241, 220, 1);
     hasher.k <== 0;
