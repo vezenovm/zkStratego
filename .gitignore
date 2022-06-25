@@ -8,4 +8,6 @@ typechain
 cache
 artifacts
 
+*.ptau
+*_plonk
 .DS_Store
