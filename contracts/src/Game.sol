@@ -196,10 +196,18 @@ piecesNoRanks[36][0], piecesNoRanks[36][1], piecesNoRanks[37][0], piecesNoRanks[
         uint256 _boardHash, // board hash changes upon a successful move or attack,
         uint256 _result, // result for an attack move performed last by the opponent
         uint256[3] memory _defendingPiece, // defending piece with ranking if attacked by opponent in previous round
-        bytes memory proof  
+        bytes memory proof,
+        uint256 _lostAttackBoardHash,
+        bytes memory _lostAttackProof
     ) external {
         Game storage game = games[_gameId];
         require(game.nonce != 0, "Turn=0");
+
+        // Piece from previous round that is to be removed in an attack
+        uint256[3] memory lostPiece = (game.nonce - 1) % 2 == 0 ? game.playerTwoLostPiece[game.nonce - 1] : game.playerOneLostPiece[game.nonce - 1];
+        if (lostPiece[2] == 1) { // 
+            playMove(_gameId, _lostAttackBoardHash, [lostPiece[0], lostPiece[1], 0], [uint256(11), 11, 0], _lostAttackProof);
+        }
 
         uint256 currentBoardHash = game.boards[game.nonce % 2];
         uint256[3] memory move = game.moves[game.nonce - 1];
@@ -239,7 +247,7 @@ piecesNoRanks[36][0], piecesNoRanks[36][1], piecesNoRanks[37][0], piecesNoRanks[
                     game.winner = game.participants[(game.nonce - 1) % 2];
                 }    
             } else if (_result == 1) { // Win
-                game.nonce % 2 == 0 ? game.playerTwoLostPiece[game.nonce] = [move[0], move[1]]: game.playerOneLostPiece[game.nonce] = [move[0], move[1]];
+                game.nonce % 2 == 0 ? game.playerTwoLostPiece[game.nonce] = [move[0], move[1], 1]: game.playerOneLostPiece[game.nonce] = [move[0], move[1], 1];
             }
             game.moves[game.nonce] = _nextPieceToMove;
 
@@ -251,8 +259,6 @@ piecesNoRanks[36][0], piecesNoRanks[36][1], piecesNoRanks[37][0], piecesNoRanks[
         if (move[2] == 0) {
             playMove(_gameId, _boardHash, _nextPieceToMove, _newPieceLocation, proof);
         }
-
-        // TODO: check for a winner
     }
 
 }

@@ -30,8 +30,8 @@ interface IGame {
         mapping(uint256 => uint256[40][2]) piecesNoRanksPlayerOne;
         mapping(uint256 => uint256[40][2]) piecesNoRanksPlayerTwo;
         /// Mapping of game nonce to piece in the case of a lost attack
-        mapping(uint256 => uint256[2]) playerOneLostPiece;
-        mapping(uint256 => uint256[2]) playerTwoLostPiece;
+        mapping(uint256 => uint256[3]) playerOneLostPiece;
+        mapping(uint256 => uint256[3]) playerTwoLostPiece;
         /// The number of pieces each player has taken from their opponent
         uint256[2] hits;
         /// The winner of the game.
@@ -79,6 +79,18 @@ interface IGame {
         uint256[3] memory _newPieceLocation,
         bytes memory proof
     ) external;
+
+    function playTurn(
+        uint256 _gameId,
+        uint256[3] memory _nextPieceToMove,
+        uint256[3] memory _newPieceLocation,
+        uint256 _boardHash, // board hash changes upon a successful move or attack,
+        uint256 _result, // result for an attack move performed last by the opponent
+        uint256[3] memory _defendingPiece, // defending piece with ranking if attacked by opponent in previous round
+        bytes memory proof,
+        uint256 _lostAttackBoardHash,
+        bytes memory _lostAttackProof
+    ) external;
     
     // function playMove(
     //     uint256 _gameId,
@@ -92,14 +104,16 @@ interface IGame {
     // a tie resulting in both board hashing changing while a win or loss is either the attacking or defending board hash changing
     // We will have the the last index of `_nextPieceToMove` specify whether the last move that is being processed is an attack or normal move
     // 
-    function playTurn(
-        uint256 _gameId,
-        uint256[3] memory _nextPieceToMove,
-        uint256[3] memory _newPieceLocation,
-        uint256 _boardHash, // board hash changes upon a successful move or attack,
-        uint256 _result, // result for an attack move performed last by the opponent
-        uint256[3] memory _defendingPiece, // defending piece with ranking if attacked by opponent in previous round
-        bytes memory proof    
-    ) external;
+    // function playTurn(
+    //     uint256 _gameId,
+    //     uint256[3] memory _nextPieceToMove,
+    //     uint256[3] memory _newPieceLocation,
+    //     uint256 _boardHash, // board hash changes upon a successful move or attack,
+    //     uint256 _result, // result for an attack move performed last by the opponent
+    //     uint256[3] memory _defendingPiece, // defending piece with ranking if attacked by opponent in previous round
+    //     bytes memory proof    
+    // ) external;
+
+
 
 }
